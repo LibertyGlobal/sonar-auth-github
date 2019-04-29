@@ -19,11 +19,14 @@
  */
 package org.sonarsource.auth.github;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import java.lang.reflect.Type;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 /**
  * Lite representation of JSON response of GET https://api.github.com/user/emails
@@ -38,7 +41,10 @@ public class GsonEmails {
     Type collectionType = new TypeToken<Collection<GsonEmail>>() {
     }.getType();
     Gson gson = new Gson();
-    return gson.fromJson(json, collectionType);
+    return gson.<List<GsonEmail>>fromJson(json, collectionType)
+        .stream()
+        .filter(Objects::nonNull)
+        .collect(Collectors.toList());
   }
 
   public static class GsonEmail {
@@ -69,5 +75,4 @@ public class GsonEmails {
       return primary;
     }
   }
-
 }

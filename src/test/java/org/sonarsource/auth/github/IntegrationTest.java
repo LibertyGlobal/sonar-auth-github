@@ -29,6 +29,8 @@ import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -55,6 +57,9 @@ public class IntegrationTest {
   @Rule
   public MockWebServer github = new MockWebServer();
 
+  @Rule
+  public MockWebServer sonarQube = new MockWebServer();
+
   // load settings with default values
   private MapSettings settings = new MapSettings(new PropertyDefinitions(GitHubSettings.definitions()));
   private GitHubSettings gitHubSettings = new GitHubSettings(settings);
@@ -62,10 +67,14 @@ public class IntegrationTest {
   private UserIdentityFactoryImpl userIdentityFactory = new UserIdentityFactoryImpl(gitHubSettings, sonarRuntime);
   private ScribeGitHubApi scribeApi = new ScribeGitHubApi(gitHubSettings);
   private GitHubRestClient gitHubRestClient = new GitHubRestClient(gitHubSettings);
+  private SecondaryEmailsSupplier secondaryEmailsSupplier = new SecondaryEmailsSupplier(gitHubSettings);
 
   private String gitHubUrl;
+  private String sqLocalServerAddress;
 
-  private GitHubIdentityProvider underTest = new GitHubIdentityProvider(gitHubSettings, userIdentityFactory, scribeApi, gitHubRestClient);
+  private static final String secondaryEmailsToken = "abc";
+
+  private GitHubIdentityProvider underTest = new GitHubIdentityProvider(gitHubSettings, userIdentityFactory, scribeApi, gitHubRestClient, secondaryEmailsSupplier);
 
   @Before
   public void enable() {
@@ -75,6 +84,17 @@ public class IntegrationTest {
     settings.setProperty("sonar.auth.github.enabled", true);
     settings.setProperty("sonar.auth.github.apiUrl", gitHubUrl);
     settings.setProperty("sonar.auth.github.webUrl", gitHubUrl);
+
+    sqLocalServerAddress = format("http://%s:%d", sonarQube.getHostName(), sonarQube.getPort());
+    settings.setProperty("sonar.auth.github.secondaryEmails.serverAddress", sqLocalServerAddress);
+    settings.setProperty("sonar.auth.github.secondaryEmails.token", secondaryEmailsToken);
+
+    secondaryEmailsSupplier.start();
+  }
+
+  @After
+  public void disable() {
+    secondaryEmailsSupplier.stop();
   }
 
   /**
@@ -109,6 +129,10 @@ public class IntegrationTest {
     github.enqueue(newSuccessfulAccessTokenResponse());
     // response of api.github.com/user
     github.enqueue(new MockResponse().setBody("{\"id\":\"ABCD\", \"login\":\"octocat\", \"name\":\"monalisa octocat\",\"email\":\"octocat@github.com\"}"));
+    // response of api.github.com/user/emails
+    github.enqueue(new MockResponse().setBody("[]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse());
 
     HttpServletRequest request = newRequest("the-verifier-code");
     DumbCallbackContext callbackContext = new DumbCallbackContext(request);
@@ -156,6 +180,8 @@ public class IntegrationTest {
         "    \"primary\": true\n" +
         "  },\n" +
         "]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse());
 
     HttpServletRequest request = newRequest("the-verifier-code");
     DumbCallbackContext callbackContext = new DumbCallbackContext(request);
@@ -176,6 +202,8 @@ public class IntegrationTest {
     github.enqueue(new MockResponse().setBody("{\"id\":\"ABCD\", \"login\":\"octocat\", \"name\":\"monalisa octocat\",\"email\":null}"));
     // response of api.github.com/user/emails
     github.enqueue(new MockResponse().setBody("[]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse());
 
     HttpServletRequest request = newRequest("the-verifier-code");
     DumbCallbackContext callbackContext = new DumbCallbackContext(request);
@@ -211,6 +239,8 @@ public class IntegrationTest {
     github.enqueue(newSuccessfulAccessTokenResponse());
     // response of api.github.com/user
     github.enqueue(new MockResponse().setBody("{\"id\":\"ABCD\", \"login\":\"octocat\", \"name\":\"monalisa octocat\",\"email\":\"octocat@github.com\"}"));
+    // response of api.github.com/user/emails
+    github.enqueue(new MockResponse().setBody("[]"));
     // response of api.github.com/user/teams
     github.enqueue(new MockResponse().setBody("[\n" +
       "  {\n" +
@@ -220,6 +250,8 @@ public class IntegrationTest {
       "    }\n" +
       "  }\n" +
       "]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse());
 
     HttpServletRequest request = newRequest("the-verifier-code");
     DumbCallbackContext callbackContext = new DumbCallbackContext(request);
@@ -235,6 +267,8 @@ public class IntegrationTest {
     github.enqueue(newSuccessfulAccessTokenResponse());
     // response of api.github.com/user
     github.enqueue(new MockResponse().setBody("{\"id\":\"ABCD\", \"login\":\"octocat\", \"name\":\"monalisa octocat\",\"email\":\"octocat@github.com\"}"));
+    // response of api.github.com/user/emails
+    github.enqueue(new MockResponse().setBody("[]"));
     // responses of api.github.com/user/teams
     github.enqueue(new MockResponse()
       .setHeader("Link", "<" + gitHubUrl + "/user/teams?per_page=100&page=2>; rel=\"next\", <" + gitHubUrl + "/user/teams?per_page=100&page=2>; rel=\"last\"")
@@ -256,6 +290,8 @@ public class IntegrationTest {
         "    }\n" +
         "  }\n" +
         "]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse());
 
     HttpServletRequest request = newRequest("the-verifier-code");
     DumbCallbackContext callbackContext = new DumbCallbackContext(request);
@@ -288,6 +324,10 @@ public class IntegrationTest {
     github.enqueue(new MockResponse().setBody("{\"id\":\"ABCD\", \"login\":\"octocat\", \"name\":\"monalisa octocat\",\"email\":\"octocat@github.com\"}"));
     // response of api.github.com/orgs/example0/members/user
     github.enqueue(new MockResponse().setResponseCode(204));
+    // response of api.github.com/user/emails
+    github.enqueue(new MockResponse().setBody("[]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse());
 
     HttpServletRequest request = newRequest("the-verifier-code");
     DumbCallbackContext callbackContext = new DumbCallbackContext(request);
@@ -310,6 +350,10 @@ public class IntegrationTest {
     github.enqueue(new MockResponse().setResponseCode(404).setBody("{}"));
     // response of api.github.com/orgs/second_org/members/user
     github.enqueue(new MockResponse().setResponseCode(404).setBody("{}"));
+    // response of api.github.com/user/emails
+    github.enqueue(new MockResponse().setBody("[]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse());
 
     HttpServletRequest request = newRequest("the-verifier-code");
     DumbCallbackContext callbackContext = new DumbCallbackContext(request);
@@ -331,6 +375,10 @@ public class IntegrationTest {
     github.enqueue(new MockResponse().setBody("{\"id\":\"ABCD\", \"login\":\"octocat\", \"name\":\"monalisa octocat\",\"email\":\"octocat@github.com\"}"));
     // response of api.github.com/orgs/example0/members/user
     github.enqueue(new MockResponse().setResponseCode(404).setBody("{}"));
+    // response of api.github.com/user/emails
+    github.enqueue(new MockResponse().setBody("[]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse());
 
     HttpServletRequest request = newRequest("the-verifier-code");
     DumbCallbackContext callbackContext = new DumbCallbackContext(request);
@@ -379,6 +427,76 @@ public class IntegrationTest {
     } catch (IllegalStateException e) {
       assertThat(e.getMessage()).isEqualTo("Fail to execute request '" + gitHubSettings.apiURL() + "orgs/example/members/octocat'. HTTP code: 500, response: {error}");
     }
+  }
+
+  @Test
+  public void callback_on_successful_authentication_with_additional_emails() throws InterruptedException {
+    github.enqueue(newSuccessfulAccessTokenResponse());
+    // response of api.github.com/user
+    github.enqueue(new MockResponse().setBody("{\"id\":\"ABCD\", \"login\":\"octocat\", \"name\":\"monalisa octocat\",\"email\":\"octocat@github.com\"}"));
+    // response of api.github.com/user/emails
+    github.enqueue(new MockResponse().setBody("["
+        + "  {\"email\":\"octocat@github.com\", \"verified\": true, \"primary\": true, \"visibility\": \"public\"}"
+        + ", {\"email\":\"octocatprivate1@github.com\", \"verified\": true, \"primary\": false, \"visibility\": \"private\"}"
+        + ", {\"email\":\"octocatprivate2@github.com\", \"verified\": true, \"primary\": false, \"visibility\": \"private\"}"
+        + "]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse());
+
+    HttpServletRequest request = newRequest("the-verifier-code");
+    DumbCallbackContext callbackContext = new DumbCallbackContext(request);
+    underTest.callback(callbackContext);
+
+    RecordedRequest userUpdateRequest = sonarQube.takeRequest();
+    assertThat(userUpdateRequest.getMethod()).isEqualTo("POST");
+    assertThat(userUpdateRequest.getPath()).isEqualTo("/api/users/update");
+    assertThat(userUpdateRequest.getHeader("Authorization")).isEqualTo("Basic YWJjOg==");
+    assertThat(userUpdateRequest.getHeader("Content-Type")).isEqualTo("application/x-www-form-urlencoded");
+    assertThat(userUpdateRequest.getBody().readUtf8()).isEqualTo("login=octocat&scmAccount=octocatprivate1%40github.com&scmAccount=octocatprivate2%40github.com");
+  }
+
+  @Test
+  public void callback_on_successful_authentication_without_additional_emails() throws InterruptedException {
+    github.enqueue(newSuccessfulAccessTokenResponse());
+    // response of api.github.com/user
+    github.enqueue(new MockResponse().setBody("{\"id\":\"ABCD\", \"login\":\"octocat\", \"name\":\"monalisa octocat\",\"email\":\"octocat@github.com\"}"));
+    // response of api.github.com/user/emails
+    github.enqueue(new MockResponse().setBody("[]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse());
+
+    HttpServletRequest request = newRequest("the-verifier-code");
+    DumbCallbackContext callbackContext = new DumbCallbackContext(request);
+    underTest.callback(callbackContext);
+
+    RecordedRequest userUpdateRequest = sonarQube.takeRequest();
+    assertThat(userUpdateRequest.getMethod()).isEqualTo("POST");
+    assertThat(userUpdateRequest.getPath()).isEqualTo("/api/users/update");
+    assertThat(userUpdateRequest.getHeader("Authorization")).isEqualTo("Basic YWJjOg==");
+    assertThat(userUpdateRequest.getHeader("Content-Type")).isEqualTo("application/x-www-form-urlencoded");
+    assertThat(userUpdateRequest.getBody().readUtf8()).isEqualTo("login=octocat&scmAccount=");
+  }
+
+  @Test
+  public void callback_on_successful_authentication_secondary_email_update_request_failure() throws InterruptedException {
+    github.enqueue(newSuccessfulAccessTokenResponse());
+    // response of api.github.com/user
+    github.enqueue(new MockResponse().setBody("{\"id\":\"ABCD\", \"login\":\"octocat\", \"name\":\"monalisa octocat\",\"email\":\"octocat@github.com\"}"));
+    // response of api.github.com/user/emails
+    github.enqueue(new MockResponse().setBody("[]"));
+    // response of seconary-email-update request -> sonarqube/api/users/update
+    sonarQube.enqueue(new MockResponse().setResponseCode(500));
+
+    HttpServletRequest request = newRequest("the-verifier-code");
+    DumbCallbackContext callbackContext = new DumbCallbackContext(request);
+    underTest.callback(callbackContext);
+
+    RecordedRequest userUpdateRequest = sonarQube.takeRequest();
+    assertThat(userUpdateRequest.getMethod()).isEqualTo("POST");
+    assertThat(userUpdateRequest.getPath()).isEqualTo("/api/users/update");
+    assertThat(userUpdateRequest.getHeader("Authorization")).isEqualTo("Basic YWJjOg==");
+    assertThat(userUpdateRequest.getHeader("Content-Type")).isEqualTo("application/x-www-form-urlencoded");
+    assertThat(userUpdateRequest.getBody().readUtf8()).isEqualTo("login=octocat&scmAccount=");
   }
 
   /**

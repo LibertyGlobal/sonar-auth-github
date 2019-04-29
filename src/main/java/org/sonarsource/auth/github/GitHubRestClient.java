@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.utils.log.Logger;
@@ -56,15 +57,10 @@ public class GitHubRestClient {
     return GsonUser.parse(responseBody);
   }
 
-  String getEmail(OAuth20Service scribe, OAuth2AccessToken accessToken) throws IOException, ExecutionException, InterruptedException {
+  List<GsonEmails.GsonEmail> getAllEmails(OAuth20Service scribe, OAuth2AccessToken accessToken) throws IOException, ExecutionException, InterruptedException {
     String responseBody = executeRequest(settings.apiURL() + "user/emails", scribe, accessToken).getBody();
     LOGGER.trace("Emails response received : {}", responseBody);
-    List<GsonEmails.GsonEmail> emails = GsonEmails.parse(responseBody);
-    return emails.stream()
-      .filter(email -> email.isPrimary() && email.isVerified())
-      .findFirst()
-      .map(GsonEmails.GsonEmail::getEmail)
-      .orElse(null);
+    return GsonEmails.parse(responseBody);
   }
 
   List<GsonTeams.GsonTeam> getTeams(OAuth20Service scribe, OAuth2AccessToken accessToken) throws IOException, ExecutionException, InterruptedException {

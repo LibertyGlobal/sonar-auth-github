@@ -41,7 +41,8 @@ public class GitHubIdentityProviderTest {
   private UserIdentityFactoryImpl userIdentityFactory = mock(UserIdentityFactoryImpl.class);
   private ScribeGitHubApi scribeApi = new ScribeGitHubApi(gitHubSettings);
   private GitHubRestClient gitHubRestClient = new GitHubRestClient(gitHubSettings);
-  private GitHubIdentityProvider underTest = new GitHubIdentityProvider(gitHubSettings, userIdentityFactory, scribeApi, gitHubRestClient);
+  private SecondaryEmailsSupplier secondaryEmailsSupplier = new SecondaryEmailsSupplier(gitHubSettings);
+  private GitHubIdentityProvider underTest = new GitHubIdentityProvider(gitHubSettings, userIdentityFactory, scribeApi, gitHubRestClient, secondaryEmailsSupplier);
 
   @Test
   public void check_fields() {

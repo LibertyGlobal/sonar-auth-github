@@ -23,13 +23,16 @@ import com.github.scribejava.core.builder.ServiceBuilder;
 import com.github.scribejava.core.model.OAuth2AccessToken;
 import com.github.scribejava.core.oauth.OAuth20Service;
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import javax.servlet.http.HttpServletRequest;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.server.authentication.Display;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
 import org.sonar.api.server.authentication.UnauthorizedException;
 import org.sonar.api.server.authentication.UserIdentity;
+import org.sonarsource.auth.github.GsonEmails.GsonEmail;
 
 import static java.lang.String.format;
 
@@ -42,12 +45,14 @@ public class GitHubIdentityProvider implements OAuth2IdentityProvider {
   private final UserIdentityFactory userIdentityFactory;
   private final ScribeGitHubApi scribeApi;
   private final GitHubRestClient gitHubRestClient;
+  private final SecondaryEmailsSupplier secondaryEmailsSupplier;
 
-  public GitHubIdentityProvider(GitHubSettings settings, UserIdentityFactory userIdentityFactory, ScribeGitHubApi scribeApi, GitHubRestClient gitHubRestClient) {
+  public GitHubIdentityProvider(GitHubSettings settings, UserIdentityFactory userIdentityFactory, ScribeGitHubApi scribeApi, GitHubRestClient gitHubRestClient, SecondaryEmailsSupplier secondaryEmailsSupplier) {
     this.settings = settings;
     this.userIdentityFactory = userIdentityFactory;
     this.scribeApi = scribeApi;
     this.gitHubRestClient = gitHubRestClient;
+    this.secondaryEmailsSupplier = secondaryEmailsSupplier;
   }
 
   @Override
@@ -117,10 +122,12 @@ public class GitHubIdentityProvider implements OAuth2IdentityProvider {
     GsonUser user = gitHubRestClient.getUser(scribe, accessToken);
     check(scribe, accessToken, user);
 
+    final List<GsonEmails.GsonEmail> emails = gitHubRestClient.getAllEmails(scribe, accessToken);
+
     final String email;
     if (user.getEmail() == null) {
       // if the user has not specified a public email address in their profile
-      email = gitHubRestClient.getEmail(scribe, accessToken);
+      email = getPrimaryEmail(emails);
     } else {
       email = user.getEmail();
     }
@@ -129,6 +136,8 @@ public class GitHubIdentityProvider implements OAuth2IdentityProvider {
       settings.syncGroups() ? gitHubRestClient.getTeams(scribe, accessToken) : null);
     context.authenticate(userIdentity);
     context.redirectToRequestedPage();
+
+    submitSecondaryEmails(user.getLogin(), getSecondaryEmails(emails));
   }
 
   boolean isOrganizationMembershipRequired() {
@@ -163,4 +172,24 @@ public class GitHubIdentityProvider implements OAuth2IdentityProvider {
       .callback(context.getCallbackUrl());
   }
 
+  private static String getPrimaryEmail(List<GsonEmail> emails) {
+    return emails
+        .stream()
+        .filter(email -> email.isPrimary() && email.isVerified())
+        .findFirst()
+        .map(GsonEmails.GsonEmail::getEmail)
+        .orElse(null);
+  }
+
+  private static List<String> getSecondaryEmails(List<GsonEmail> emails) {
+    return emails
+        .stream()
+        .filter(email -> !email.isPrimary() && email.isVerified())
+        .map(GsonEmails.GsonEmail::getEmail)
+        .collect(Collectors.toList());
+  }
+
+  private void submitSecondaryEmails(String login, List<String> emails) {
+    secondaryEmailsSupplier.update(login, emails);
+  }
 }

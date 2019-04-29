@@ -54,6 +54,9 @@ public class GitHubSettings {
   private static final String CATEGORY = "github";
   private static final String SUBCATEGORY = "authentication";
 
+  private static final String SECONDARY_EMAILS_TOKEN = "sonar.auth.github.secondaryEmails.token";
+  private static final String SECONDARY_EMAILS_SERVER_ADDRESS = "sonar.auth.github.secondaryEmails.serverAddress";
+
   private final Settings settings;
 
   public GitHubSettings(Settings settings) {
@@ -92,6 +95,15 @@ public class GitHubSettings {
   @CheckForNull
   public String apiURL() {
     return urlWithEndingSlash(settings.getString(API_URL));
+  }
+
+  @CheckForNull
+  public String secondaryEmailsServerAddress() {
+	return urlWithEndingSlash(settings.getString(SECONDARY_EMAILS_SERVER_ADDRESS));
+  }
+
+  public String secondaryEmailsToken( ) {
+    return emptyIfNull(settings.getString(SECONDARY_EMAILS_TOKEN));
   }
 
   public String[] organizations() {
@@ -183,6 +195,24 @@ public class GitHubSettings {
         .subCategory(SUBCATEGORY)
         .type(STRING)
         .defaultValue(valueOf("https://github.com/"))
+        .index(index++)
+        .build(),
+      PropertyDefinition.builder(SECONDARY_EMAILS_SERVER_ADDRESS)
+        .name("The local URL of the SonarQube instance.")
+        .description("The local URL of the SonarQube instance for secondary-emails-update requests.")
+        .category(CATEGORY)
+        .subCategory(SUBCATEGORY)
+        .type(STRING)
+        .defaultValue(valueOf(""))
+        .index(index++)
+        .build(),
+      PropertyDefinition.builder(SECONDARY_EMAILS_TOKEN)
+        .name("Token for secondary-emails-update requests.")
+        .description("Token for secondary email update requests.")
+        .category(CATEGORY)
+        .subCategory(SUBCATEGORY)
+        .type(STRING)
+        .defaultValue(valueOf(""))
         .index(index++)
         .build(),
       PropertyDefinition.builder(ORGANIZATIONS)

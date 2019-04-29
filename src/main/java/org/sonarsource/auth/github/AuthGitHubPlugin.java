@@ -30,7 +30,8 @@ public class AuthGitHubPlugin implements Plugin {
       GitHubSettings.class,
       GitHubRestClient.class,
       UserIdentityFactoryImpl.class,
-      ScribeGitHubApi.class);
+      ScribeGitHubApi.class,
+      SecondaryEmailsSupplier.class);
     context.addExtensions(GitHubSettings.definitions());
   }
 }

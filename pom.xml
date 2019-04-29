@@ -10,7 +10,7 @@
 
   <groupId>org.sonarsource.auth.github</groupId>
   <artifactId>sonar-auth-github-plugin</artifactId>
-  <version>1.6-SNAPSHOT</version>
+  <version>1.6-SNAPSHOT-onemw-4</version>
   <packaging>sonar-plugin</packaging>
   <name>GitHub Authentication for SonarQube</name>
   <description>GitHub Authentication for SonarQube</description>
@@ -46,6 +46,16 @@
     </developer>
   </developers>
 
+  <contributors>
+    <contributor>
+      <name>Adam Romanek</name>
+      <email>aromanek.contractor@libertyglobal.com</email>
+      <organization>Liberty Global B.V.</organization>
+      <organizationUrl>https://www.libertyglobal.com</organizationUrl>
+      <timezone>Europe/Warsaw</timezone>
+    </contributor>
+  </contributors>
+
   <organization>
     <name>SonarSource</name>
     <url>http://sonarsource.com</url>
@@ -80,7 +90,11 @@
       <version>3.0.0</version>
       <scope>provided</scope>
     </dependency>
-
+    <dependency>
+      <groupId>com.squareup.okhttp</groupId>
+      <artifactId>okhttp</artifactId>
+      <version>2.7.5</version>
+    </dependency>
     <dependency>
       <groupId>org.assertj</groupId>
       <artifactId>assertj-core</artifactId>
