@@ -24,12 +24,17 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
+import org.sonarsource.auth.github.GitHubIdentityProvider.EmailSet;
+import org.sonarsource.auth.github.GsonEmails.GsonEmail;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.sonarsource.auth.github.GitHubSettings.LOGIN_STRATEGY_DEFAULT_VALUE;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class GitHubIdentityProviderTest {
 
@@ -182,5 +187,83 @@ public class GitHubIdentityProviderTest {
     } else {
       settings.setProperty("sonar.auth.github.enabled", false);
     }
+  }
+
+  @Test
+  public void emailset_just_one_from_libertyglobal() {
+    List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
+      add(new GsonEmail("vip@libertyglobal.com", true, true));
+    }};
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    assertThat(emailSet.primary).isEqualTo("vip@libertyglobal.com");
+    assertThat(emailSet.secondary.size()).isEqualTo(0);
+  }
+
+  @Test
+  public void emailset_just_one_not_from_libertyglobal() {
+    List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
+      add(new GsonEmail("vip@google.com", true, true));
+    }};
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    assertThat(emailSet.primary).isEqualTo("vip@google.com");
+    assertThat(emailSet.secondary.size()).isEqualTo(0);
+  }
+
+  @Test
+  public void emailset_just_one_not_primary() {
+    List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
+      add(new GsonEmail("vip@google.com", false, true));
+    }};
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    assertThat(emailSet.primary).isNull();
+    assertThat(emailSet.secondary.size()).isEqualTo(0);
+  }
+
+  @Test
+  public void emailset_just_one_not_verified() {
+    List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
+      add(new GsonEmail("vip@google.com", true, false));
+    }};
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    assertThat(emailSet.primary).isNull();
+    assertThat(emailSet.secondary.size()).isEqualTo(0);
+  }
+
+  @Test
+  public void emailset_libertyglobal_primary() {
+    List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
+      add(new GsonEmail("vip@libertyglobal.com", true, true));
+      add(new GsonEmail("vip@google.com", true, false));
+    }};
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    assertThat(emailSet.primary).isEqualTo("vip@libertyglobal.com");
+    assertThat(emailSet.secondary.size()).isEqualTo(1);
+    assertThat(emailSet.secondary.get(0)).isEqualTo("vip@google.com");
+  }
+
+  @Test
+  public void emailset_libertyglobal_not_primary() {
+    List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
+      add(new GsonEmail("vip@google.com", true, true));
+      add(new GsonEmail("vip@libertyglobal.com", true, false));
+    }};
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    assertThat(emailSet.primary).isEqualTo("vip@libertyglobal.com");
+    assertThat(emailSet.secondary.size()).isEqualTo(1);
+    assertThat(emailSet.secondary.get(0)).isEqualTo("vip@google.com");
+  }
+
+  @Test
+  public void emailset_no_libertyglobal() {
+    List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
+      add(new GsonEmail("vip@google.com", true, false));
+      add(new GsonEmail("vip@apple.com", true, true));
+      add(new GsonEmail("vip@microsoft.com", true, false));
+    }};
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    assertThat(emailSet.primary).isEqualTo("vip@apple.com");
+    assertThat(emailSet.secondary.size()).isEqualTo(2);
+    assertThat(emailSet.secondary.get(0)).isEqualTo("vip@google.com");
+    assertThat(emailSet.secondary.get(1)).isEqualTo("vip@microsoft.com");
   }
 }

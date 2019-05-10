@@ -23,9 +23,13 @@ import com.github.scribejava.core.builder.ServiceBuilder;
 import com.github.scribejava.core.model.OAuth2AccessToken;
 import com.github.scribejava.core.oauth.OAuth20Service;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import javax.servlet.http.HttpServletRequest;
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.server.authentication.Display;
@@ -124,20 +128,14 @@ public class GitHubIdentityProvider implements OAuth2IdentityProvider {
 
     final List<GsonEmails.GsonEmail> emails = gitHubRestClient.getAllEmails(scribe, accessToken);
 
-    final String email;
-    if (user.getEmail() == null) {
-      // if the user has not specified a public email address in their profile
-      email = getPrimaryEmail(emails);
-    } else {
-      email = user.getEmail();
-    }
+    final EmailSet emailSet = getEmailSet(emails);
 
-    UserIdentity userIdentity = userIdentityFactory.create(user, email,
+    UserIdentity userIdentity = userIdentityFactory.create(user, emailSet.primary,
       settings.syncGroups() ? gitHubRestClient.getTeams(scribe, accessToken) : null);
     context.authenticate(userIdentity);
     context.redirectToRequestedPage();
 
-    submitSecondaryEmails(user.getLogin(), getSecondaryEmails(emails));
+    submitSecondaryEmails(user.getLogin(), emailSet.secondary);
   }
 
   boolean isOrganizationMembershipRequired() {
@@ -172,21 +170,62 @@ public class GitHubIdentityProvider implements OAuth2IdentityProvider {
       .callback(context.getCallbackUrl());
   }
 
-  private static String getPrimaryEmail(List<GsonEmail> emails) {
-    return emails
-        .stream()
-        .filter(email -> email.isPrimary() && email.isVerified())
+  static final class EmailSet {
+    public final String primary;
+    public final List<String> secondary;
+
+    public EmailSet(String primary, List<String> secondary) {
+      this.primary = primary;
+      this.secondary = secondary;
+    }
+  }
+
+  /**
+   * Splits email addresses obtained from GitHub into a primary one and a list
+   * of secondary ones. An email address from libertyglobal.com domain is
+   * always considered primary. In case such an email address is absent then
+   * the email address marked as primary in GitHub is considered primary. The
+   * list of secondary addresses contains the list of email addresses that are
+   * not the primary one.
+   *
+   * @param emails
+   * @return email set splitted into primary and secondary
+   */
+  static EmailSet getEmailSet(List<GsonEmail> emails) {
+    String primary;
+    List<String> secondary;
+
+    Supplier<Stream<GsonEmail>> verifiedEmailsSupplier = () -> emails.stream().filter(email -> email.isVerified());
+
+    String lgEmail =
+        verifiedEmailsSupplier.get()
+        .filter(email -> email.getEmail().endsWith("@libertyglobal.com"))
         .findFirst()
         .map(GsonEmails.GsonEmail::getEmail)
         .orElse(null);
-  }
 
-  private static List<String> getSecondaryEmails(List<GsonEmail> emails) {
-    return emails
-        .stream()
-        .filter(email -> !email.isPrimary() && email.isVerified())
-        .map(GsonEmails.GsonEmail::getEmail)
-        .collect(Collectors.toList());
+    if (lgEmail != null) {
+      primary = lgEmail;
+    } else {
+      primary =
+          verifiedEmailsSupplier.get()
+          .filter(email -> email.isPrimary())
+          .findFirst()
+          .map(GsonEmails.GsonEmail::getEmail)
+          .orElse(null);
+    }
+
+    if (primary != null) {
+      secondary =
+          verifiedEmailsSupplier.get()
+          .filter(email -> !email.getEmail().equals(primary))
+          .map(GsonEmails.GsonEmail::getEmail)
+          .collect(Collectors.toList());
+    } else {
+      secondary = new ArrayList<String>();
+    }
+
+    return new EmailSet(primary, secondary);
   }
 
   private void submitSecondaryEmails(String login, List<String> emails) {

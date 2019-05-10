@@ -130,7 +130,14 @@ public class IntegrationTest {
     // response of api.github.com/user
     github.enqueue(new MockResponse().setBody("{\"id\":\"ABCD\", \"login\":\"octocat\", \"name\":\"monalisa octocat\",\"email\":\"octocat@github.com\"}"));
     // response of api.github.com/user/emails
-    github.enqueue(new MockResponse().setBody("[]"));
+    github.enqueue(new MockResponse().setBody(
+        "[\n" +
+          "  {\n" +
+          "    \"email\": \"octocat@github.com\",\n" +
+          "    \"verified\": true,\n" +
+          "    \"primary\": true\n" +
+          "  },\n" +
+          "]"));
     // response of seconary-email-update request -> sonarqube/api/users/update
     sonarQube.enqueue(new MockResponse());
 
