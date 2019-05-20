@@ -24,13 +24,16 @@ import com.github.scribejava.core.model.OAuth2AccessToken;
 import com.github.scribejava.core.oauth.OAuth20Service;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import javax.servlet.http.HttpServletRequest;
+
 import org.sonar.api.server.ServerSide;
 import org.sonar.api.server.authentication.Display;
 import org.sonar.api.server.authentication.OAuth2IdentityProvider;
@@ -128,7 +131,7 @@ public class GitHubIdentityProvider implements OAuth2IdentityProvider {
 
     final List<GsonEmails.GsonEmail> emails = gitHubRestClient.getAllEmails(scribe, accessToken);
 
-    final EmailSet emailSet = getEmailSet(emails);
+    final EmailSet emailSet = getEmailSet(emails, settings.primaryEmailDomains());
 
     UserIdentity userIdentity = userIdentityFactory.create(user, emailSet.primary,
       settings.syncGroups() ? gitHubRestClient.getTeams(scribe, accessToken) : null);
@@ -191,21 +194,30 @@ public class GitHubIdentityProvider implements OAuth2IdentityProvider {
    * @param emails
    * @return email set splitted into primary and secondary
    */
-  static EmailSet getEmailSet(List<GsonEmail> emails) {
+  static EmailSet getEmailSet(List<GsonEmail> emails, String[] primaryEmailDomains) {
     String primary;
     List<String> secondary;
 
-    Supplier<Stream<GsonEmail>> verifiedEmailsSupplier = () -> emails.stream().filter(email -> email.isVerified());
+    Supplier<Stream<GsonEmail>> verifiedEmailsSupplier =
+        () -> emails.stream().filter(email -> email.isVerified());
 
-    String lgEmail =
+    List<String> nonEmptyPrimaryEmailDomains =
+        Arrays.stream(primaryEmailDomains)
+        .filter(domain -> domain != null && !domain.isEmpty())
+        .collect(Collectors.toList());
+
+    Predicate<String> domainInPrimaryEmailDomains = (email -> nonEmptyPrimaryEmailDomains.stream()
+        .anyMatch((domain -> email.endsWith(("@" + domain)))));
+
+    String emailFromPrimaryDomains =
         verifiedEmailsSupplier.get()
-        .filter(email -> email.getEmail().endsWith("@libertyglobal.com"))
+        .filter(email -> domainInPrimaryEmailDomains.test(email.getEmail()))
         .findFirst()
         .map(GsonEmails.GsonEmail::getEmail)
         .orElse(null);
 
-    if (lgEmail != null) {
-      primary = lgEmail;
+    if (emailFromPrimaryDomains != null) {
+      primary = emailFromPrimaryDomains;
     } else {
       primary =
           verifiedEmailsSupplier.get()

@@ -194,7 +194,8 @@ public class GitHubIdentityProviderTest {
     List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
       add(new GsonEmail("vip@libertyglobal.com", true, true));
     }};
-    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    String[] domains = { "libertyglobal.com" };
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails, domains);
     assertThat(emailSet.primary).isEqualTo("vip@libertyglobal.com");
     assertThat(emailSet.secondary.size()).isEqualTo(0);
   }
@@ -204,7 +205,8 @@ public class GitHubIdentityProviderTest {
     List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
       add(new GsonEmail("vip@google.com", true, true));
     }};
-    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    String[] domains = { "libertyglobal.com" };
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails, domains);
     assertThat(emailSet.primary).isEqualTo("vip@google.com");
     assertThat(emailSet.secondary.size()).isEqualTo(0);
   }
@@ -214,7 +216,8 @@ public class GitHubIdentityProviderTest {
     List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
       add(new GsonEmail("vip@google.com", false, true));
     }};
-    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    String[] domains = { "libertyglobal.com" };
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails, domains);
     assertThat(emailSet.primary).isNull();
     assertThat(emailSet.secondary.size()).isEqualTo(0);
   }
@@ -224,7 +227,8 @@ public class GitHubIdentityProviderTest {
     List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
       add(new GsonEmail("vip@google.com", true, false));
     }};
-    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    String[] domains = { "libertyglobal.com" };
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails, domains);
     assertThat(emailSet.primary).isNull();
     assertThat(emailSet.secondary.size()).isEqualTo(0);
   }
@@ -235,7 +239,8 @@ public class GitHubIdentityProviderTest {
       add(new GsonEmail("vip@libertyglobal.com", true, true));
       add(new GsonEmail("vip@google.com", true, false));
     }};
-    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    String[] domains = { "libertyglobal.com" };
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails, domains);
     assertThat(emailSet.primary).isEqualTo("vip@libertyglobal.com");
     assertThat(emailSet.secondary.size()).isEqualTo(1);
     assertThat(emailSet.secondary.get(0)).isEqualTo("vip@google.com");
@@ -247,7 +252,8 @@ public class GitHubIdentityProviderTest {
       add(new GsonEmail("vip@google.com", true, true));
       add(new GsonEmail("vip@libertyglobal.com", true, false));
     }};
-    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    String[] domains = { "libertyglobal.com" };
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails, domains);
     assertThat(emailSet.primary).isEqualTo("vip@libertyglobal.com");
     assertThat(emailSet.secondary.size()).isEqualTo(1);
     assertThat(emailSet.secondary.get(0)).isEqualTo("vip@google.com");
@@ -260,10 +266,35 @@ public class GitHubIdentityProviderTest {
       add(new GsonEmail("vip@apple.com", true, true));
       add(new GsonEmail("vip@microsoft.com", true, false));
     }};
-    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails);
+    String[] domains = { "libertyglobal.com" };
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails, domains);
     assertThat(emailSet.primary).isEqualTo("vip@apple.com");
     assertThat(emailSet.secondary.size()).isEqualTo(2);
     assertThat(emailSet.secondary.get(0)).isEqualTo("vip@google.com");
     assertThat(emailSet.secondary.get(1)).isEqualTo("vip@microsoft.com");
+  }
+
+  @Test
+  public void emailset_domains_with_blank_domain() {
+    List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
+      add(new GsonEmail("vip@google.com", true, true));
+      add(new GsonEmail("vip@libertyglobal.com", true, false));
+    }};
+    String[] domains = { "upc.pl", "", "libertyglobal.com" };
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails, domains);
+    assertThat(emailSet.primary).isEqualTo("vip@libertyglobal.com");
+    assertThat(emailSet.secondary.size()).isEqualTo(1);
+  }
+
+  @Test
+  public void emailset_no_primary_domain() {
+    List<GsonEmail> emails = new ArrayList<GsonEmails.GsonEmail>() {{
+      add(new GsonEmail("vip@google.com", true, false));
+      add(new GsonEmail("vip@libertyglobal.com", true, true));
+    }};
+    String[] domains = {};
+    EmailSet emailSet = GitHubIdentityProvider.getEmailSet(emails, domains);
+    assertThat(emailSet.primary).isEqualTo("vip@libertyglobal.com");
+    assertThat(emailSet.secondary.size()).isEqualTo(1);
   }
 }

@@ -158,6 +158,6 @@ public class GitHubSettingsTest {
 
   @Test
   public void definitions() {
-    assertThat(GitHubSettings.definitions()).hasSize(11);
+    assertThat(GitHubSettings.definitions()).hasSize(12);
   }
 }

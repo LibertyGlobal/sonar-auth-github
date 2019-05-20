@@ -57,6 +57,8 @@ public class GitHubSettings {
   private static final String SECONDARY_EMAILS_TOKEN = "sonar.auth.github.secondaryEmails.token";
   private static final String SECONDARY_EMAILS_SERVER_ADDRESS = "sonar.auth.github.secondaryEmails.serverAddress";
 
+  private static final String PRIMARY_EMAIL_DOMAINS = "sonar.auth.github.primaryEmailDomains";
+
   private final Settings settings;
 
   public GitHubSettings(Settings settings) {
@@ -104,6 +106,10 @@ public class GitHubSettings {
 
   public String secondaryEmailsToken( ) {
     return emptyIfNull(settings.getString(SECONDARY_EMAILS_TOKEN));
+  }
+
+  public String[] primaryEmailDomains() {
+    return settings.getStringArray(PRIMARY_EMAIL_DOMAINS);
   }
 
   public String[] organizations() {
@@ -213,6 +219,15 @@ public class GitHubSettings {
         .subCategory(SUBCATEGORY)
         .type(STRING)
         .defaultValue(valueOf(""))
+        .index(index++)
+        .build(),
+      PropertyDefinition.builder(PRIMARY_EMAIL_DOMAINS)
+        .name("Primary email domains")
+        .description("Email addresses from these domains are considered primary, regardless of what " +
+          "GitHub API says.")
+        .multiValues(true)
+        .category(CATEGORY)
+        .subCategory(SUBCATEGORY)
         .index(index++)
         .build(),
       PropertyDefinition.builder(ORGANIZATIONS)
